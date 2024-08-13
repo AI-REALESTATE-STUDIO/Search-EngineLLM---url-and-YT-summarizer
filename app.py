@@ -9,7 +9,7 @@ import json
 
 ## Streamlit APP
 st.set_page_config(page_title="Summarize Text From YouTube or Website", page_icon="🦜")
-st.title("🦜 LangChain: Summarize Text From YT or Website")
+st.title("🦜 Summarize Text From YT or Website")
 st.subheader('Summarize URL')
 
 ## Get the Groq API Key and URL (YT or website) to be summarized

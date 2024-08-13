@@ -5,7 +5,7 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
 import requests
 from bs4 import BeautifulSoup
-import re
+import json
 
 ## Streamlit APP
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
@@ -45,55 +45,26 @@ def scrape_website(url):
     return content
 
 def extract_youtube_info(url):
-    debug_info = {}
+    video_id = url.split("v=")[-1]
+    api_url = f"https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v={video_id}&format=json"
+    
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers)
+        response = requests.get(api_url)
         response.raise_for_status()
-        html_content = response.text
-        debug_info['response_status'] = response.status_code
-        debug_info['content_length'] = len(html_content)
-
-        # Extract title
-        title_match = re.search(r'<title>(.*?)</title>', html_content)
-        title = title_match.group(1) if title_match else "Title not found"
-        debug_info['title'] = title
-
-        # Extract description
-        description_match = re.search(r'"description":{"simpleText":"(.*?)"}', html_content)
-        if description_match:
-            description = description_match.group(1)
-        else:
-            description_match = re.search(r'"description":"(.*?)"', html_content)
-            description = description_match.group(1) if description_match else "Description not found"
-        debug_info['description'] = description
-
-        # Extract transcript (if available)
-        video_id = url.split('v=')[1] if 'v=' in url else url.split('/')[-1]
-        transcript_url = f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}"
-        transcript_response = requests.get(transcript_url)
-        debug_info['transcript_status'] = transcript_response.status_code
+        data = response.json()
         
-        transcript = ""
-        if transcript_response.status_code == 200 and transcript_response.text:
-            transcript_soup = BeautifulSoup(transcript_response.text, 'html.parser')
-            transcript = ' '.join([p.text for p in transcript_soup.find_all('p')])
-        debug_info['transcript_length'] = len(transcript)
-
-        content = f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript}"
-        debug_info['final_content_length'] = len(content)
-        return content, debug_info
+        title = data.get('title', 'Title not found')
+        author = data.get('author_name', 'Author not found')
+        
+        content = f"Title: {title}\nAuthor: {author}\n\nThis is a YouTube video by {author} titled '{title}'."
+        return content
     except Exception as e:
         st.error(f"Error extracting YouTube video information: {str(e)}")
-        debug_info['error'] = str(e)
-        return None, debug_info
+        return None
 
 def load_content(url):
     if "youtube.com" in url or "youtu.be" in url:
-        content, debug_info = extract_youtube_info(url)
-        st.write("Debug Information:", debug_info)
+        content = extract_youtube_info(url)
         if content:
             return [Document(page_content=content)]
         else:
@@ -119,15 +90,10 @@ if st.button("Summarize the Content from YT or Website"):
                     st.write("Extracted content:")
                     st.text(docs[0].page_content)
                     
-                    # Check if we have enough meaningful content
-                    content = docs[0].page_content
-                    if len(content.split()) < 30 or ("Description not found" in content and "Transcript:" not in content):
-                        st.warning("The extracted content might not be sufficient for a meaningful summary. Please check if the URL is correct and accessible.")
-                    else:
-                        with st.spinner("Generating summary..."):
-                            chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
-                            output_summary = chain.run(docs)
-                            st.success("Summary generated successfully!")
-                            st.write(output_summary)
+                    with st.spinner("Generating summary..."):
+                        chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
+                        output_summary = chain.run(docs)
+                        st.success("Summary generated successfully!")
+                        st.write(output_summary)
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")

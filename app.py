@@ -95,15 +95,21 @@ if st.button("Summarize the Content from YT or Website"):
         st.error("Please enter a valid URL. It can be a YT video URL or website URL")
     else:
         try:
-            with st.spinner("Waiting..."):
+            with st.spinner("Extracting content..."):
                 docs = load_content(generic_url)
                 
                 if not docs or not docs[0].page_content.strip():
                     st.error("Failed to extract content from the provided URL. Please check the URL or try another one.")
                 else:
-                    ## Chain For Summarization
-                    chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
-                    output_summary = chain.run(docs)
-                    st.success(output_summary)
+                    st.success("Content extracted successfully!")
+                    st.write("Extracted content preview (first 500 characters):")
+                    st.write(docs[0].page_content[:500] + "...")
+                    
+                    with st.spinner("Generating summary..."):
+                        ## Chain For Summarization
+                        chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
+                        output_summary = chain.run(docs)
+                        st.success("Summary generated successfully!")
+                        st.write(output_summary)
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")

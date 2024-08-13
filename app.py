@@ -45,6 +45,7 @@ def scrape_website(url):
     return content
 
 def extract_youtube_info(url):
+    debug_info = {}
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -52,36 +53,47 @@ def extract_youtube_info(url):
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         html_content = response.text
+        debug_info['response_status'] = response.status_code
+        debug_info['content_length'] = len(html_content)
 
         # Extract title
         title_match = re.search(r'<title>(.*?)</title>', html_content)
         title = title_match.group(1) if title_match else "Title not found"
+        debug_info['title'] = title
 
         # Extract description
         description_match = re.search(r'"description":{"simpleText":"(.*?)"}', html_content)
-        description = description_match.group(1) if description_match else ""
-        if not description:
+        if description_match:
+            description = description_match.group(1)
+        else:
             description_match = re.search(r'"description":"(.*?)"', html_content)
             description = description_match.group(1) if description_match else "Description not found"
+        debug_info['description'] = description
 
         # Extract transcript (if available)
-        transcript = ""
         video_id = url.split('v=')[1] if 'v=' in url else url.split('/')[-1]
         transcript_url = f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}"
         transcript_response = requests.get(transcript_url)
+        debug_info['transcript_status'] = transcript_response.status_code
+        
+        transcript = ""
         if transcript_response.status_code == 200 and transcript_response.text:
             transcript_soup = BeautifulSoup(transcript_response.text, 'html.parser')
             transcript = ' '.join([p.text for p in transcript_soup.find_all('p')])
+        debug_info['transcript_length'] = len(transcript)
 
         content = f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript}"
-        return content
+        debug_info['final_content_length'] = len(content)
+        return content, debug_info
     except Exception as e:
         st.error(f"Error extracting YouTube video information: {str(e)}")
-        return None
+        debug_info['error'] = str(e)
+        return None, debug_info
 
 def load_content(url):
     if "youtube.com" in url or "youtu.be" in url:
-        content = extract_youtube_info(url)
+        content, debug_info = extract_youtube_info(url)
+        st.write("Debug Information:", debug_info)
         if content:
             return [Document(page_content=content)]
         else:
@@ -109,7 +121,7 @@ if st.button("Summarize the Content from YT or Website"):
                     
                     # Check if we have enough meaningful content
                     content = docs[0].page_content
-                    if len(content.split()) < 30 or "Description not found" in content and "Transcript:" not in content:
+                    if len(content.split()) < 30 or ("Description not found" in content and "Transcript:" not in content):
                         st.warning("The extracted content might not be sufficient for a meaningful summary. Please check if the URL is correct and accessible.")
                     else:
                         with st.spinner("Generating summary..."):

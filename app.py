@@ -73,11 +73,11 @@ def load_content(url):
         content = scrape_website(url)
         return [Document(page_content=content)]
 
-if st.button("Summarize the Content from YT or Website"):
+if st.button("Summarize the Content from YouTube or Website"):
     if not api_key or not generic_url.strip():
         st.error("Please provide the information to get started")
     elif not validators.url(generic_url):
-        st.error("Please enter a valid URL. It can be a YT video URL or website URL")
+        st.error("Please enter a valid URL. It can be a YouTube video URL or website URL")
     else:
         try:
             with st.spinner("Extracting content..."):

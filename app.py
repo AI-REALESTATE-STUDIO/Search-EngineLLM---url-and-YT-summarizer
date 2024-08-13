@@ -5,8 +5,6 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
 import requests
 from bs4 import BeautifulSoup
-import json
-import re
 
 ## Streamlit APP
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
@@ -49,44 +47,24 @@ def extract_youtube_info(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-        html_content = response.text
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Extract ytInitialPlayerResponse using regex
-        match = re.search(r'var ytInitialPlayerResponse = ({.*?});', html_content)
-        if not match:
-            st.error("Could not find ytInitialPlayerResponse in the page")
-            return None
+        # Extract title
+        title = soup.find('meta', property='og:title')['content']
         
-        json_str = match.group(1)
+        # Extract description
+        description = soup.find('meta', property='og:description')['content']
         
-        # Clean the JSON string
-        json_str = re.sub(r',\s*}', '}', json_str)
-        json_str = re.sub(r',\s*]', ']', json_str)
-        
-        # Debug: Print the first 500 characters of the cleaned JSON string
-        st.write("Cleaned JSON string (first 500 chars):", json_str[:500])
-        
-        json_data = json.loads(json_str)
-        
-        title = json_data['videoDetails']['title']
-        description = json_data['videoDetails']['shortDescription']
-        
-        # Extract transcript if available
+        # Extract transcript (if available)
         transcript = ""
-        if 'playerCaptionsTracklistRenderer' in json_data.get('captions', {}):
-            caption_url = json_data['captions']['playerCaptionsTracklistRenderer']['captionTracks'][0]['baseUrl']
-            caption_response = requests.get(caption_url)
-            caption_soup = BeautifulSoup(caption_response.text, 'html.parser')
-            transcript = ' '.join([p.text for p in caption_soup.find_all('p')])
+        transcript_url = f"https://www.youtube.com/api/timedtext?lang=en&v={url.split('v=')[1]}"
+        transcript_response = requests.get(transcript_url)
+        if transcript_response.status_code == 200:
+            transcript_soup = BeautifulSoup(transcript_response.text, 'html.parser')
+            transcript = ' '.join([p.text for p in transcript_soup.find_all('p')])
         
         content = f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript}"
         return content
-    
-    except json.JSONDecodeError as json_error:
-        st.error(f"JSON Decode Error: {str(json_error)}")
-        st.write("Error occurred at position:", json_error.pos)
-        st.write("Line and column of error:", json_error.lineno, json_error.colno)
-        return None
     except Exception as e:
         st.error(f"Error extracting YouTube video information: {str(e)}")
         return None

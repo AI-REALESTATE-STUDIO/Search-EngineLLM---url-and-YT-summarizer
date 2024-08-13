@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
 st.title("🦜 LangChain: Summarize Text From YT or Website")
 st.subheader('Summarize URL')
+st.secrets["GROQ_API_KEY"]
 
 ## Get the Groq API Key and URL (YT or website) to be summarized
 st.sidebar.title("Settings")

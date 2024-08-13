@@ -23,7 +23,7 @@ else:
 generic_url = st.text_input("URL", label_visibility="collapsed")
 
 ## Gemma Model Using Groq API
-llm = ChatGroq(model="Gemma-7b-It", groq_api_key=api_key)  # '''USE GEMMA FOR BULLETED OUTPUT'''
+llm = ChatGroq(model="Gemma-7b-It", groq_api_key=api_key)
 
 prompt_template = """
 Provide a summary of the following content in 300 words:
@@ -59,7 +59,10 @@ def extract_youtube_info(url):
 
         # Extract description
         description_match = re.search(r'"description":{"simpleText":"(.*?)"}', html_content)
-        description = description_match.group(1) if description_match else "Description not found"
+        description = description_match.group(1) if description_match else ""
+        if not description:
+            description_match = re.search(r'"description":"(.*?)"', html_content)
+            description = description_match.group(1) if description_match else "Description not found"
 
         # Extract transcript (if available)
         transcript = ""
@@ -88,7 +91,6 @@ def load_content(url):
         return [Document(page_content=content)]
 
 if st.button("Summarize the Content from YT or Website"):
-    ## Validate all the inputs
     if not api_key or not generic_url.strip():
         st.error("Please provide the information to get started")
     elif not validators.url(generic_url):
@@ -102,14 +104,18 @@ if st.button("Summarize the Content from YT or Website"):
                     st.error("Failed to extract content from the provided URL. Please check the URL or try another one.")
                 else:
                     st.success("Content extracted successfully!")
-                    st.write("Extracted content preview (first 500 characters):")
-                    st.write(docs[0].page_content[:500] + "...")
+                    st.write("Extracted content:")
+                    st.text(docs[0].page_content)
                     
-                    with st.spinner("Generating summary..."):
-                        ## Chain For Summarization
-                        chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
-                        output_summary = chain.run(docs)
-                        st.success("Summary generated successfully!")
-                        st.write(output_summary)
+                    # Check if we have enough meaningful content
+                    content = docs[0].page_content
+                    if len(content.split()) < 30 or "Description not found" in content and "Transcript:" not in content:
+                        st.warning("The extracted content might not be sufficient for a meaningful summary. Please check if the URL is correct and accessible.")
+                    else:
+                        with st.spinner("Generating summary..."):
+                            chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
+                            output_summary = chain.run(docs)
+                            st.success("Summary generated successfully!")
+                            st.write(output_summary)
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")

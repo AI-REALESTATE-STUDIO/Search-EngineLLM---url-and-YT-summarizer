@@ -5,6 +5,7 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.schema import Document
 import requests
 from bs4 import BeautifulSoup
+import re
 
 ## Streamlit APP
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
@@ -45,24 +46,30 @@ def scrape_website(url):
 
 def extract_youtube_info(url):
     try:
-        response = requests.get(url)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
+        html_content = response.text
+
         # Extract title
-        title = soup.find('meta', property='og:title')['content']
-        
+        title_match = re.search(r'<title>(.*?)</title>', html_content)
+        title = title_match.group(1) if title_match else "Title not found"
+
         # Extract description
-        description = soup.find('meta', property='og:description')['content']
-        
+        description_match = re.search(r'"description":{"simpleText":"(.*?)"}', html_content)
+        description = description_match.group(1) if description_match else "Description not found"
+
         # Extract transcript (if available)
         transcript = ""
-        transcript_url = f"https://www.youtube.com/api/timedtext?lang=en&v={url.split('v=')[1]}"
+        video_id = url.split('v=')[1] if 'v=' in url else url.split('/')[-1]
+        transcript_url = f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}"
         transcript_response = requests.get(transcript_url)
-        if transcript_response.status_code == 200:
+        if transcript_response.status_code == 200 and transcript_response.text:
             transcript_soup = BeautifulSoup(transcript_response.text, 'html.parser')
             transcript = ' '.join([p.text for p in transcript_soup.find_all('p')])
-        
+
         content = f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript}"
         return content
     except Exception as e:

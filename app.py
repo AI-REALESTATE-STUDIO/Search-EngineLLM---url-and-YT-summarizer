@@ -2,11 +2,10 @@ import validators, streamlit as st
 from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain.chains.summarize import load_summarize_chain
-from langchain_community.document_loaders import YoutubeLoader
 from langchain.schema import Document
-import os
 import requests
 from bs4 import BeautifulSoup
+import json
 
 ## Streamlit APP
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
@@ -15,11 +14,9 @@ st.subheader('Summarize URL')
 
 ## Get the Groq API Key and URL (YT or website) to be summarized
 st.sidebar.title("Settings")
-
-
 api_key = st.secrets["GROQ_API_KEY"]
 if api_key:
-    st.sidebar.success("API Key loaded succesfully.")
+    st.sidebar.success("API Key loaded successfully.")
 else:
     st.sidebar.error("API Key not found. Please check your Streamlit secrets")
 
@@ -47,30 +44,66 @@ def scrape_website(url):
     
     return content
 
+def extract_youtube_info(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Find the script tag containing video information
+        scripts = soup.find_all('script')
+        for script in scripts:
+            if 'var ytInitialPlayerResponse = ' in script.text:
+                data = script.text.split('var ytInitialPlayerResponse = ')[1].split(';var')[0]
+                json_data = json.loads(data)
+                
+                title = json_data['videoDetails']['title']
+                description = json_data['videoDetails']['shortDescription']
+                
+                # Extract transcript if available
+                transcript = ""
+                if 'playerCaptionsTracklistRenderer' in json_data.get('captions', {}):
+                    caption_url = json_data['captions']['playerCaptionsTracklistRenderer']['captionTracks'][0]['baseUrl']
+                    caption_response = requests.get(caption_url)
+                    caption_soup = BeautifulSoup(caption_response.text, 'html.parser')
+                    transcript = ' '.join([p.text for p in caption_soup.find_all('p')])
+                
+                content = f"Title: {title}\n\nDescription: {description}\n\nTranscript: {transcript}"
+                return content
+        
+        raise ValueError("Could not find video information")
+    except Exception as e:
+        st.error(f"Error extracting YouTube video information: {str(e)}")
+        return None
+
+def load_content(url):
+    if "youtube.com" in url or "youtu.be" in url:
+        content = extract_youtube_info(url)
+        if content:
+            return [Document(page_content=content)]
+        else:
+            return None
+    else:
+        content = scrape_website(url)
+        return [Document(page_content=content)]
+
 if st.button("Summarize the Content from YT or Website"):
     ## Validate all the inputs
-    if not api_key.strip() or not generic_url.strip():
+    if not api_key or not generic_url.strip():
         st.error("Please provide the information to get started")
     elif not validators.url(generic_url):
         st.error("Please enter a valid URL. It can be a YT video URL or website URL")
     else:
         try:
             with st.spinner("Waiting..."):
-                ## Loading the website or YT video data
-                if "youtube.com" in generic_url:
-                    loader = YoutubeLoader.from_youtube_url(generic_url, add_video_info=True)
-                    docs = loader.load()
-                else:
-                    content = scrape_website(generic_url)
-                    docs = [Document(page_content=content)]
-
+                docs = load_content(generic_url)
+                
                 if not docs or not docs[0].page_content.strip():
                     st.error("Failed to extract content from the provided URL. Please check the URL or try another one.")
                 else:
                     ## Chain For Summarization
                     chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
                     output_summary = chain.run(docs)
-
                     st.success(output_summary)
         except Exception as e:
-            st.exception(f"Exception: {e}")
+            st.error(f"An error occurred: {str(e)}")

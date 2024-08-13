@@ -12,16 +12,16 @@ from bs4 import BeautifulSoup
 st.set_page_config(page_title="LangChain: Summarize Text From YT or Website", page_icon="🦜")
 st.title("🦜 LangChain: Summarize Text From YT or Website")
 st.subheader('Summarize URL')
-st.secrets["GROQ_API_KEY"]
 
 ## Get the Groq API Key and URL (YT or website) to be summarized
 st.sidebar.title("Settings")
-api_key = os.getenv("GROQ_API_KEY")
 
+
+api_key = st.secrets["GROQ_API_KEY"]
 if api_key:
-    st.sidebar.success("API Key loaded from .env file.")
+    st.sidebar.success("API Key loaded succesfully.")
 else:
-    st.sidebar.error("API Key not found. Please check your .env file.")
+    st.sidebar.error("API Key not found. Please check your Streamlit secrets")
 
 generic_url = st.text_input("URL", label_visibility="collapsed")
 
